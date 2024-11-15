@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-imgL = cv2.imread("phone2_l.jpg", cv2.IMREAD_GRAYSCALE)  # left image
-imgR = cv2.imread("phone2_r.jpg", cv2.IMREAD_GRAYSCALE)  # right image
+imgL = cv2.imread("construction_l.jpeg", cv2.IMREAD_GRAYSCALE)  # left image
+imgR = cv2.imread("construction_r.jpeg", cv2.IMREAD_GRAYSCALE)  # right image
 
 # imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB)
 # imgR = cv2.cvtColor(imgR, cv2.COLOR_BGR2RGB)
@@ -58,6 +58,8 @@ def lowes_ratio_test(matches, ratio_threshold=0.6):
     for m, n in matches:
         if m.distance < ratio_threshold * n.distance:
             filtered_matches.append(m)
+    # sort the matches based on distance
+    filtered_matches = sorted(filtered_matches, key=lambda x: x.distance)
     print(len(filtered_matches))
     return filtered_matches
 
@@ -88,7 +90,8 @@ def compute_fundamental_matrix(matches, kp1, kp2, method=cv2.FM_RANSAC):
     """
     pts1, pts2 = [], []
     fundamental_matrix, inliers = None, None
-    for m in matches[:8]:
+    # get the 8 best matches
+    for m in matches[-8:] + matches[:8]:
         pts1.append(kp1[m.queryIdx].pt)
         pts2.append(kp2[m.trainIdx].pt)
     if pts1 and pts2:
@@ -99,8 +102,8 @@ def compute_fundamental_matrix(matches, kp1, kp2, method=cv2.FM_RANSAC):
             np.float32(pts1),
             np.float32(pts2),
             method=method,
-            # ransacReprojThreshold=3,
-            # confidence=0.99,
+            ransacReprojThreshold=1,
+            confidence=0.99,
         )
     return fundamental_matrix, inliers, pts1, pts2
 
@@ -125,6 +128,10 @@ imgR_undistorted = cv2.warpPerspective(imgR, H2, (w2, h2))
 cv2.imwrite("undistorted_L.png", imgL_undistorted)
 cv2.imwrite("undistorted_R.png", imgR_undistorted)
 
+# ### TODO: -DEBUG- ###
+# imgL_undistorted = imgL
+# imgR_undistorted = imgR
+
 # Using StereoBM
 # stereo = cv2.StereoBM_create(numDisparities=16, blockSize=15)
 # disparity_BM = stereo.compute(imgL_undistorted, imgR_undistorted)
@@ -138,7 +145,7 @@ cv2.imwrite("undistorted_R.png", imgR_undistorted)
 #  specific parameters obtained through trial and error.
 win_size = 2
 min_disp = -4
-max_disp = 12
+max_disp = 9
 num_disp = max_disp - min_disp  # Needs to be divisible by 16
 stereo = cv2.StereoSGBM_create(
     minDisparity=min_disp,
@@ -155,3 +162,19 @@ disparity_SGBM = stereo.compute(imgL_undistorted, imgR_undistorted)
 plt.imshow(disparity_SGBM, "gray")
 plt.colorbar()
 plt.show()
+
+# use WLS filtering to get better depth map
+right_matcher = cv2.ximgproc.createRightMatcher(stereo);
+disparity_SGBM_r = right_matcher.compute(imgR_undistorted, imgL_undistorted);
+sigma = 1.5
+lmbda = 8000.0
+# Now create DisparityWLSFilter
+wls_filter = cv2.ximgproc.createDisparityWLSFilter(stereo);
+wls_filter.setLambda(lmbda);
+wls_filter.setSigmaColor(sigma);
+filtered_disp = wls_filter.filter(disparity_SGBM, imgL_undistorted, disparity_map_right=disparity_SGBM_r);
+
+plt.imshow(filtered_disp, "gray")
+plt.colorbar()
+plt.show()
+cv2.imwrite("depth_map.png", filtered_disp)
