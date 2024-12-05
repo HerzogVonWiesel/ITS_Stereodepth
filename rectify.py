@@ -49,11 +49,11 @@ def lowes_ratio_test(matches, ratio_threshold=0.6):
             filtered_matches.append(m)
     # sort the matches based on distance
     # filtered_matches = sorted(filtered_matches, key=lambda x: x.distance)[::-1]
-    print(len(filtered_matches))
+    print(f"Number of good matches: {len(filtered_matches)}")
     return filtered_matches
 
 
-def draw_matches(imgL, imgR, kp1, des1, kp2, des2, flann_match_pairs, n=8):
+def draw_matches(imgL, imgR, kp1, des1, kp2, des2, flann_match_pairs, n=8, imgPath="", additional=""):
     """Draw the first n mathces between the left and right images."""
     # https://docs.opencv.org/4.2.0/d4/d5d/group__features2d__draw.html
     # https://docs.opencv.org/2.4/modules/features2d/doc/common_interfaces_of_descriptor_matchers.html
@@ -67,7 +67,7 @@ def draw_matches(imgL, imgR, kp1, des1, kp2, des2, flann_match_pairs, n=8):
         flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
     )
     # cv2.imshow("Matches", img)
-    cv2.imwrite("OUT/SIFT_Matches.png", img)
+    cv2.imwrite(os.path.join(imgPath, "DEBUG/"+additional+"_SIFT.png"), img)
     # cv2.waitKey(0)
 
 
@@ -93,14 +93,14 @@ def compute_fundamental_matrix(matches, kp1, kp2, method=cv2.FM_RANSAC):
     return fundamental_matrix, inliers, pts1, pts2
 
 
-def get_fundamental_matrix(imgL, imgR, debug=False):
+def get_fundamental_matrix(imgL, imgR, debug=False, imgPath="", additional=""):
     """
     Get the fundamental matrix using SIFT keypoints, LRT and RANSAC
     """
     kp1, des1, kp2, des2, flann_match_pairs = get_kp_SIFT(imgL, imgR)
     good_matches = lowes_ratio_test(flann_match_pairs, 0.2)
     if debug:
-        draw_matches(imgL, imgR, kp1, des1, kp2, des2, good_matches)
+        draw_matches(imgL, imgR, kp1, des1, kp2, des2, good_matches, n=8, imgPath=imgPath, additional=additional)
 
     F, I, points1, points2 = compute_fundamental_matrix(good_matches, kp1, kp2)
     return F, I, points1, points2
@@ -113,14 +113,12 @@ def correct_distortion(imgL, imgR, H1, H2, w1, h1, w2, h2, imgPath, debug=False,
     imgL_undistorted = cv2.warpPerspective(imgL, H1, (w1, h1))
     imgR_undistorted = cv2.warpPerspective(imgR, H2, (w2, h2))
     if debug:
-        if not os.path.exists("OUT/DEBUG/"+imgPath):
-            os.makedirs("OUT/DEBUG/"+imgPath)
-        cv2.imwrite("OUT/DEBUG/"+imgPath+"/"+additional+"undistorted_L.png", imgL_undistorted)
+        cv2.imwrite(os.path.join(imgPath, "DEBUG/"+additional+"_undistorted.png"), imgL_undistorted)
         # cv2.imwrite("OUT/undistorted_R.png", imgR_undistorted)
     return imgL_undistorted, imgR_undistorted
 
 
-def rectify_images(imgL, imgR, F, points1, points2, imgPath="", debug=False):
+def rectify_images(imgL, imgR, F, points1, points2, imgPath="", debug=False, additional=""):
     """
     Rectify the images using the fundamental matrix and the homography matrices
     """
@@ -131,6 +129,6 @@ def rectify_images(imgL, imgR, F, points1, points2, imgPath="", debug=False):
         np.float32(points1), np.float32(points2), F, imgSize=(w1, h1), threshold=thresh,
     )
     imgL_undistorted, imgR_undistorted = correct_distortion(
-        imgL, imgR, H1, H2, w1, h1, w2, h2, imgPath, debug, additional="rectified_"
+        imgL, imgR, H1, H2, w1, h1, w2, h2, imgPath, debug, additional
     )
     return imgL_undistorted, imgR_undistorted

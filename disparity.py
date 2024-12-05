@@ -31,9 +31,7 @@ def stereo_sgbm(imgL_undistorted, imgR_undistorted, imgPath, debug=False, additi
     # plt.colorbar()
     # plt.show()
     if debug:
-        if not os.path.exists("OUT/DEBUG/"+imgPath):
-            os.makedirs("OUT/DEBUG/"+imgPath)
-        cv2.imwrite("OUT/DEBUG/"+imgPath+"/"+additional+"depth_map_noisy.png", \
+        cv2.imwrite(os.path.join(imgPath, "DEBUG/"+additional+"_depth_noisy.png"), \
             cv2.normalize(src=disparity_SGBM_l, dst=None, beta=0, alpha=255, norm_type=cv2.NORM_MINMAX))
 
     right_matcher = cv2.ximgproc.createRightMatcher(stereo)

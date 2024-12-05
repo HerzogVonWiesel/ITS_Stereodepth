@@ -1,39 +1,69 @@
-import cv2
 import os
+os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
+
+import cv2
+import argparse
+import numpy as np
 
 from rectify import get_fundamental_matrix, rectify_images
 from disparity import depth_process
 
 
-isVideo = False
-debug = True
-path = "phone2"
-suffixes = ["_l", "_r"]
-img_format = ".jpg"
+parser = argparse.ArgumentParser(description="A script to rectify stereo images and compute the disparity map.")
+parser.add_argument("path", type=str, help="Path to the input file (required).")
+parser.add_argument("-s", "--skiprectify", action="store_true", help="Skip rectification (optional).")
+parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode (optional).")
+parser.add_argument("-o", "--output", type=str, help="Path to the output folder (optional).")
+parser.add_argument("-m", "--metric", nargs=2, type=float, help="Focal length & sensor width to enable metric depth map (EXPERIMENTAL).")
 
-additional = "00001" if isVideo else ""
-#print(path+additional+suffixes[0]+img_format)
-imgL = cv2.imread(path+additional+suffixes[0]+img_format, cv2.IMREAD_GRAYSCALE)  # left image
-imgR = cv2.imread(path+additional+suffixes[1]+img_format, cv2.IMREAD_GRAYSCALE)  # right image
+args = parser.parse_args()
 
-def compute_save_depth(imgL_undistorted, imgR_undistorted, path, normalize=True, debug=False, additional=""):
+
+def compute_save_depth(imgL_undistorted, imgR_undistorted, path, metric, debug=False, additional=""):
     depth_map = depth_process(imgL_undistorted, imgR_undistorted, path, debug, additional)
-    if normalize:
+    if not metric:
         depth_map = cv2.normalize(src=depth_map, dst=depth_map, beta=0, alpha=255, norm_type=cv2.NORM_MINMAX)
-    # print(path+additional+"depth_map_filtered.png")
-    cv2.imwrite("OUT/"+path+"/"+additional+"depth_map_filtered.png", depth_map)
+    else:
+        focal_mm, sensor_width_mm = metric
+        # (focal_mm / sensor_width_mm) * image_width_in_pixels
+        focal_pixel = (focal_mm / sensor_width_mm) * imgL_undistorted.shape[1]
+        # baseline (meter) * focal (pixel) / disparity (pixel)
+        depth_map = 0.12 * focal_pixel / depth_map
+        depth_map = np.float32(depth_map)
+    # print one value nearly at the top left corner, one value in the center, and one value nearly at the bottom right corner
+    print(f"Depth map values: {depth_map[0, 0]}, {depth_map[depth_map.shape[0]//2, depth_map.shape[1]//2]}, {depth_map[-1, -1]}")
+    img_format = ".exr" if metric else ".png"
+    cv2.imwrite(os.path.join(path, "OUT/"+additional+"_depth"+img_format), depth_map)
 
-F, I, points1, points2 = get_fundamental_matrix(imgL, imgR, debug)
-if isVideo:
-    videoLength = len([name for name in os.listdir(path) if os.path.isfile(os.path.join(path, name))])/2
-    for i in range(1, int(videoLength)+1):
-        additional = str(i).zfill(5)
-        imgL = cv2.imread(path+additional+suffixes[0]+img_format, cv2.IMREAD_GRAYSCALE)
-        imgR = cv2.imread(path+additional+suffixes[1]+img_format, cv2.IMREAD_GRAYSCALE)
-        imgL_undistorted, imgR_undistorted = rectify_images(imgL, imgR, F, points1, points2, path, debug)
-        compute_save_depth(imgL_undistorted, imgR_undistorted, path, normalize=True, debug=debug, additional=additional)
+
+input_images = [(os.path.join(args.path, name), name.split('.')[0]) for name in os.listdir(args.path) if os.path.isfile(os.path.join(args.path, name))]
+if len(input_images) < 2:
+    print("Error: Not enough images in the directory.")
+    exit(1)
+
+input_images.sort()
+print(f"Processing {len(input_images)//2} stereo pairs.")
+# print(input_images)
+
+if args.output:
+    if args.debug:
+        if not os.path.exists(os.path.join(args.output, "DEBUG")):
+            os.makedirs(os.path.join(args.output, "DEBUG"))
+    if not os.path.exists(os.path.join(args.output, "OUT")):
+        os.makedirs(os.path.join(args.output, "OUT"))
 else:
-    imgL_undistorted, imgR_undistorted = rectify_images(imgL, imgR, F, points1, points2, path, debug)
-    ## TODO: DEBUG TESTING
-    # imgL_undistorted, imgR_undistorted = imgL, imgR
-    compute_save_depth(imgL_undistorted, imgR_undistorted, path, normalize=True, debug=debug, additional=additional)
+    if args.debug:
+        if not os.path.exists(os.path.join(args.path, "DEBUG")):
+            os.makedirs(os.path.join(args.path, "DEBUG"))
+    if not os.path.exists(os.path.join(args.path, "OUT")):
+        os.makedirs(os.path.join(args.path, "OUT"))
+    args.output = args.path
+
+if not args.skiprectify:
+    F, I, points1, points2 = get_fundamental_matrix(cv2.imread(input_images[0][0], cv2.IMREAD_GRAYSCALE), cv2.imread(input_images[1][0], cv2.IMREAD_GRAYSCALE), args.debug, args.output, additional=input_images[0][1])
+for i in range(len(input_images)//2):
+    imgL = cv2.imread(input_images[i*2][0], cv2.IMREAD_GRAYSCALE)
+    imgR = cv2.imread(input_images[i*2+1][0], cv2.IMREAD_GRAYSCALE)
+    if not args.skiprectify:
+        imgL, imgR = rectify_images(imgL, imgR, F, points1, points2, args.output, args.debug, additional=input_images[i*2][1])
+    compute_save_depth(imgL, imgR, args.output, args.metric, debug=args.debug, additional=input_images[i*2][1])
