@@ -28,10 +28,11 @@ def compute_save_depth(imgL_undistorted, imgR_undistorted, path, metric, debug=F
         # (focal_mm / sensor_width_mm) * image_width_in_pixels
         focal_pixel = (focal_mm / sensor_width_mm) * imgL_undistorted.shape[1]
         # baseline (meter) * focal (pixel) / disparity (pixel)
-        depth_map = 0.12 * focal_pixel / depth_map
+        depth_map = 1.0 * focal_pixel / depth_map
         depth_map = np.float32(depth_map)
     # print one value nearly at the top left corner, one value in the center, and one value nearly at the bottom right corner
-    print(f"Depth map values: {depth_map[0, 0]}, {depth_map[depth_map.shape[0]//2, depth_map.shape[1]//2]}, {depth_map[-1, -1]}")
+    if debug:
+        print(f"Depth map values: {depth_map[0, 0]}, {depth_map[depth_map.shape[0]//2, depth_map.shape[1]//2]}, {depth_map[-1, -1]}")
     img_format = ".exr" if metric else ".png"
     cv2.imwrite(os.path.join(path, "OUT/"+additional+"_depth"+img_format), depth_map)
 
