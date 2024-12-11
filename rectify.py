@@ -132,3 +132,18 @@ def rectify_images(imgL, imgR, F, points1, points2, imgPath="", debug=False, add
         imgL, imgR, H1, H2, w1, h1, w2, h2, imgPath, debug, additional
     )
     return imgL_undistorted, imgR_undistorted
+
+def rectify_images_calibrated(img1, img2, cam0, cam1, debug=False):
+    """
+    Rectify the images using the calibrated intrinsic and extrinsic parameters
+    """
+    # Assuming no distortion for the rectified images
+    dist_coeffs = np.zeros((1, 5))
+    image_size = (img1.shape[1], img1.shape[0])
+
+    map1_cam0, map2_cam0 = cv2.initUndistortRectifyMap(cam0, dist_coeffs, R=np.eye(3), newCameraMatrix=cam0, size=image_size, m1type=cv2.CV_32FC1)
+    map1_cam1, map2_cam1 = cv2.initUndistortRectifyMap(cam1, dist_coeffs, R=np.eye(3), newCameraMatrix=cam1, size=image_size, m1type=cv2.CV_32FC1)
+
+    rectified_img1 = cv2.remap(img1, map1_cam0, map2_cam0, interpolation=cv2.INTER_LINEAR)
+    rectified_img2 = cv2.remap(img2, map1_cam1, map2_cam1, interpolation=cv2.INTER_LINEAR)
+    return rectified_img1, rectified_img2
