@@ -16,17 +16,17 @@ parser.add_argument("-s", "--skiprectify", action="store_true", help="Skip recti
 parser.add_argument("-r", "--rectifyfile", type=str, help="Path to the rectification file (optional).")
 parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode (optional).")
 parser.add_argument("-o", "--output", type=str, help="Path to the output folder (optional).")
-parser.add_argument("-m", "--metric", nargs=2, type=float, help="Focal length & sensor width to enable metric depth map (EXPERIMENTAL).")
+parser.add_argument("-m", "--metric", nargs=3, type=float, help="Focal length (mm), sensor width (mm) and distance between cameras (m) to enable metric depth map (EXPERIMENTAL).")
 
 args = parser.parse_args()
 
 
-def compute_save_depth(imgL_undistorted, imgR_undistorted, path, metric, debug=False, baseline=1.0, additional=""):
+def compute_save_depth(imgL_undistorted, imgR_undistorted, path, metric, baseline=0.2, debug=False, additional=""):
     depth_map = depth_process(imgL_undistorted, imgR_undistorted, path, debug, additional)
     if not metric:
         depth_map = cv2.normalize(src=depth_map, dst=depth_map, beta=0, alpha=255, norm_type=cv2.NORM_MINMAX)
     else:
-        focal_mm, sensor_width_mm = metric
+        focal_mm, sensor_width_mm, baseline = metric
         # (focal_mm / sensor_width_mm) * image_width_in_pixels
         focal_pixel = (focal_mm / sensor_width_mm) * imgL_undistorted.shape[1]
         print(f"Focal length in pixels: {focal_pixel}")
@@ -63,7 +63,7 @@ else:
         os.makedirs(os.path.join(args.path, "OUT"))
     args.output = args.path
 
-baseline = 1.0
+baseline = 0.2
 if args.rectifyfile:
     with open(args.rectifyfile, "r") as f:
         data = json.load(f)
@@ -71,15 +71,23 @@ if args.rectifyfile:
         cam1 = np.array(data["cam1"])
         baseline = data["baseline"]
 elif not args.skiprectify:
-    F, I, points1, points2 = get_fundamental_matrix(cv2.imread(input_images[0][0], cv2.IMREAD_GRAYSCALE), cv2.imread(input_images[1][0], cv2.IMREAD_GRAYSCALE), args.debug, args.output, additional=input_images[0][1])
+    imgL = cv2.imread(input_images[0][0], cv2.IMREAD_GRAYSCALE)
+    imgR = cv2.imread(input_images[1][0], cv2.IMREAD_GRAYSCALE)
+    # resize to 1/4th of the original size
+    imgL = cv2.resize(imgL, (0, 0), fx=0.33, fy=0.33)
+    imgR = cv2.resize(imgR, (0, 0), fx=0.33, fy=0.33)
+    F, I, points1, points2 = get_fundamental_matrix(imgL, imgR, args.debug, args.output, additional=input_images[0][1])
 
 for i in range(len(input_images)//2):
     imgL = cv2.imread(input_images[i*2][0], cv2.IMREAD_GRAYSCALE)
     imgR = cv2.imread(input_images[i*2+1][0], cv2.IMREAD_GRAYSCALE)
+    # resize to 1/4th of the original size
+    imgL = cv2.resize(imgL, (0, 0), fx=0.33, fy=0.33)
+    imgR = cv2.resize(imgR, (0, 0), fx=0.33, fy=0.33)
     if args.rectifyfile:
         imgL, imgR = rectify_images_calibrated(imgL, imgR, cam0, cam1, args.debug)
         if args.debug:
             cv2.imwrite(os.path.join(args.output, "DEBUG/"+input_images[i*2][1]+"_undistorted.png"), imgL)
     elif not args.skiprectify:
         imgL, imgR = rectify_images(imgL, imgR, F, points1, points2, args.output, args.debug, additional=input_images[i*2][1])
-    compute_save_depth(imgL, imgR, args.output, args.metric, debug=args.debug, baseline=baseline, additional=input_images[i*2][1])
+    compute_save_depth(imgL, imgR, args.output, args.metric, debug=args.debug, additional=input_images[i*2][1])
