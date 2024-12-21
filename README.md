@@ -13,7 +13,7 @@ This repository is divided in two parts: /ITS_Midas_depth, which contains the co
 
 This repository presents a pipeline for depth estimation from stereo images, focusing on both calibrated and uncalibrated setups. Implemented using traditional computer vision techniques, the pipeline avoids the computational demands of deep learning models while enabling flexibility for amateur stereo configurations.
 The algorithm uses image rectification, disparity computa- tion using Semi-Global Block Matching (SGBM), and enhances through Weighted Least Squares (WLS) filtering. The pipeline also supports metric depth calculation when camera parameters are given. Its performance is evaluated against Apple’s Depth Pro model and ground truth disparities from an established dataset.
-Results underline the pipeline’s adaptability, especially in a tested DIY setup, but also its limitations in handling stark rec- tification and achieving precise metric depth. Comparisons with Depth Pro show the advantages of state-of-the-art monocular models in accuracy and detail retention. Finally, recommen- dations for improving the pipeline are given, including hybrid approaches, to enhance its utility in diverse applications.
+Results underline the pipeline’s adaptability, especially in a tested DIY setup, but also its limitations in handling stark rectification and achieving precise metric depth.
 
 The main script (ITS_Stereodepth/stereo_test.py) supports several commandline options for flexibility:
 1) path [required]: Specifies the path to the input files’ folder.
