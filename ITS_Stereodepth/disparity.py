@@ -9,7 +9,7 @@ def stereo_sgbm(imgL_undistorted, imgR_undistorted, imgPath, debug=False, additi
     # Trial & Error disparity parameters
     win_size = 2
     min_disp = 0
-    max_disp = 256
+    max_disp = 280
     num_disp = max_disp - min_disp
     stereo = cv2.StereoSGBM_create(
         minDisparity=min_disp,
@@ -66,4 +66,5 @@ def depth_process(imgL_undistorted, imgR_undistorted, imgPath, debug=False, addi
     """
     disparity_SGBM_l, disparity_SGBM_r, stereo = stereo_sgbm(imgL_undistorted, imgR_undistorted, imgPath, debug, additional)
     filtered_disp = wls_filter(disparity_SGBM_l, disparity_SGBM_r, imgL_undistorted, stereo, imgPath)
+    # filtered_disp = disparity_SGBM_l
     return filtered_disp
